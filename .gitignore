@@ -108,4 +108,4 @@ venv.bak/
 # 01_log_analyzer
 01_log_analyzer/log/nginx-access-ui.log-20170630.gz
 01_log_analyzer/report-2017.06.30.html
-01_log_analyzer/reports/reporti-*.html
+01_log_analyzer/reports/report-*.html
