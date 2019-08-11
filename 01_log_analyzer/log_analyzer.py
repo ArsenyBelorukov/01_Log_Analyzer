@@ -50,12 +50,6 @@ LogFile = namedtuple('LogFile', ['filename', 'date', 'extension'])
 ParsedLine = namedtuple('ParsedLine', ['url', 'request_time'])
 
 
-class dotdict(dict):
-    __getattr__ = dict.get
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
-
-
 def get_config(config_path):
     if not os.path.isfile(config_path):
         raise OSError("Config '{}' not found".format(config_path))
@@ -66,7 +60,7 @@ def get_config(config_path):
         raise ValueError("Can't parse config {}. {}".format(config_path, ex.message))
     r_config = config.copy()
     r_config.update(l_config)
-    return dotdict(**r_config)
+    return r_config
 
 
 def parse_logfile(logfile_name, extension):
@@ -93,7 +87,11 @@ def get_latest_log(log_dir):
         if not remath:
             continue
         else:
-            lfile_date = datetime.datetime.strptime(remath.group('date'), date_format)
+            try:
+                lfile_date = datetime.datetime.strptime(remath.group('date'), date_format)
+            except:
+                logging.info("Can't parse date in '{}'".format(lfile))
+                continue
             if logfile_date is None or lfile_date > logfile_date:
                 logfile_date = lfile_date
                 logfile_filename = lfile
@@ -151,13 +149,13 @@ def generate_report(table, report_filename, report_template):
         f.write(tmplt.safe_substitute(table_json=table))
 
 
-def get_perurl_stats(logfile_name, extension, PRECISION):
+def get_perurl_stats(parsed_lines, PRECISION):
     urls_dict = defaultdict(list)
     requests_s_count = 0
     requests_f_count = 0
     request_time_sum = 0
     logging.info("Start parsing logfile")
-    for parsed_line in parse_logfile(logfile_name, extension):
+    for parsed_line in parsed_lines:
         if parsed_line is None:
             requests_f_count += 1
             continue
@@ -170,34 +168,33 @@ def get_perurl_stats(logfile_name, extension, PRECISION):
 
 
 def main():
-    try:
-        args = parse_args()
-        config = get_config(args.config)
-        logfile = config.get("LOG")
-        FORMAT = '[%(asctime)s] %(levelname).1s %(message)s'
-        logging.basicConfig(format=FORMAT, filename=logfile, level=logging.INFO)
-        if not os.path.exists(os.path.abspath(config.REPORT_DIR)):
-            raise OSError("Report dir not found")
-        if not os.path.isfile(os.path.join(os.path.abspath(config.REPORT_DIR), config.REPORT_TEMPLATE)):
-            raise OSError("Template report.html not found")
-        logfile = get_latest_log(os.path.abspath(config.LOG_DIR))
-        logging.info("Found latest logfile {}".format(logfile.filename))
-        if check_report_exist(os.path.abspath(config.REPORT_DIR), logfile.date, config.REPORT_FILENAME_TEMPLATE,):
-            raise Exception("Report for {} already exist".format(logfile.date.date()))
-        urls_dict, requests_s_count, request_time_sum = get_perurl_stats(logfile.filename,
-                                                                          logfile.extension,
-                                                                          config.PRECISION)
-        logging.info("Start calculating statistics")
-        table = generate_stats(urls_dict, requests_s_count, request_time_sum)
-        table = table if len(table) <= config.REPORT_SIZE \
-            else sorted(table, key=lambda x: x[config.SORT_FIELD])[-config.REPORT_SIZE:]
-        logging.info("Start generating report")
-        report_filename = os.path.join(os.path.abspath(config.REPORT_DIR), logfile.date.strftime(config.REPORT_FILENAME_TEMPLATE))
-        generate_report(table, report_filename, os.path.join(os.path.abspath(config.REPORT_DIR), config.REPORT_TEMPLATE))
-        logging.info("Report {} was successfully generated".format(report_filename))
-    except Exception as ex:
-        logging.exception("{} finished with error. {}".format(__file__, str(ex)), exc_info=True)
+    args = parse_args()
+    config = get_config(args.config)
+    logfile = config.get("LOG")
+    FORMAT = '[%(asctime)s] %(levelname).1s %(message)s'
+    logging.basicConfig(format=FORMAT, filename=logfile, level=logging.INFO)
+    if not os.path.exists(os.path.abspath(config['REPORT_DIR'])):
+        os.mkdir(os.path.abspath(config['REPORT_DIR']))
+    # if not os.path.isfile(os.path.join(os.path.abspath(config['REPORT_DIR']), config['REPORT_TEMPLATE'])):
+    #     raise OSError("Template report.html not found")
+    logfile = get_latest_log(os.path.abspath(config['LOG_DIR']))
+    logging.info("Found latest logfile {}".format(logfile.filename))
+    if check_report_exist(os.path.abspath(config['REPORT_DIR']), logfile.date, config['REPORT_FILENAME_TEMPLATE'],):
+        raise Exception("Report for {} already exist".format(logfile.date.date()))
+    urls_dict, requests_s_count, request_time_sum = get_perurl_stats(parse_logfile(logfile.filename, logfile.extension),
+                                                                      config['PRECISION'])
+    logging.info("Start calculating statistics")
+    table = generate_stats(urls_dict, requests_s_count, request_time_sum)
+    table = table if len(table) <= config['REPORT_SIZE'] \
+        else sorted(table, key=lambda x: x[config['SORT_FIELD']])[-config['REPORT_SIZE']:]
+    logging.info("Start generating report")
+    report_filename = os.path.join(os.path.abspath(config['REPORT_DIR']), logfile.date.strftime(config['REPORT_FILENAME_TEMPLATE']))
+    generate_report(table, report_filename, os.path.join(os.path.abspath(config['REPORT_DIR']), config['REPORT_TEMPLATE']))
+    logging.info("Report {} was successfully generated".format(report_filename))
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as ex:
+        logging.exception("{} finished with error. {}".format(__file__, str(ex)), exc_info=True)

@@ -26,12 +26,14 @@ class LogAnalyzerTest(unittest.TestCase):
         logfile = './tests/log/nginx-access-ui.log-20170704.log'
         extension = 'log'
         with self.assertRaisesRegexp(Exception, "Too many errors in parsing logfile."):
-            log_analyzer.get_perurl_stats(logfile, extension, 5)
+            log_analyzer.get_perurl_stats(log_analyzer.parse_logfile(logfile, extension), 5)
 
     def test_get_perurl_stats_count_urls(self):
         logfile = './tests/log/nginx-access-ui.log-20170704.log'
         extension = 'log'
-        urls_dict, requests_s_count, request_time_sum = log_analyzer.get_perurl_stats(logfile, extension, 20)
+        urls_dict, requests_s_count, request_time_sum = log_analyzer.get_perurl_stats(
+            log_analyzer.parse_logfile(logfile, extension),
+            20)
         self.assertEqual(len(urls_dict), 4)
         self.assertEqual(requests_s_count, 9)
         self.assertEqual(request_time_sum, 9)
